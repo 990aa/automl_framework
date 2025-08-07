@@ -50,6 +50,53 @@ class AutoMLApp(QMainWindow):
         logging.info(f"Starting AutoML workflow for dataset: {file_path}")
         try:
             self.progress_updated.emit(10, "Reading dataset...")
+            # Dataset loading logic: replace local CSV with public mirrors/fetchers
+            # Example: For Iris
+            # df = pd.read_csv("https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data", header=None)
+            # For Titanic
+            # df = pd.read_csv("https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv")
+            # For Adult
+            # df = pd.read_csv("https://archive.ics.uci.edu/ml/machine-learning-databases/adult/adult.data", header=None)
+            # For MNIST
+            # from sklearn.datasets import fetch_openml
+            # mnist = fetch_openml('mnist_784', version=1, as_frame=True)
+            # df = mnist.data
+            # y = mnist.target
+            # For Boston
+            # from sklearn.datasets import fetch_openml
+            # boston = fetch_openml(data_id=531, as_frame=True)
+            # df = boston.data
+            # y = boston.target
+            # For California
+            # from sklearn.datasets import fetch_california_housing
+            # california = fetch_california_housing(as_frame=True)
+            # df = california.data
+            # y = california.target
+            # For Bike Sharing
+            # df = pd.read_csv("https://archive.ics.uci.edu/ml/machine-learning-databases/00275/day.csv")
+            # For 20 Newsgroups
+            # from sklearn.datasets import fetch_20newsgroups
+            # newsgroups = fetch_20newsgroups(subset='train')
+            # X = newsgroups.data
+            # y = newsgroups.target
+            # For SMS Spam
+            # import zipfile, io, requests
+            # url = "https://archive.ics.uci.edu/ml/machine-learning-databases/00228/smsspamcollection.zip"
+            # with zipfile.ZipFile(io.BytesIO(requests.get(url).content)) as z:
+            #     with z.open("SMSSpamCollection") as f:
+            #         df = pd.read_csv(f, sep='\t', header=None, names=['label', 'message'])
+            # For Heart Disease
+            # df = pd.read_csv("https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data", header=None)
+            # For Breast Cancer
+            # from sklearn.datasets import load_breast_cancer
+            # cancer = load_breast_cancer(as_frame=True)
+            # df = cancer.data
+            # y = cancer.target
+            # For Wine Quality
+            # df = pd.read_csv("https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv", sep=';')
+            # For Credit Card Fraud
+            # df = pd.read_csv("https://storage.googleapis.com/download.tensorflow.org/data/creditcard.csv")
+            # Replace the following line with the appropriate dataset loader above for your use case:
             df = pd.read_csv(file_path)
             
             # 1. Data Analysis

@@ -106,14 +106,88 @@ class DashboardWidget(QWidget):
             self.dataset_path_label.setText(f"Loaded: {self.dataset_path}")
             logging.info(f"Dataset selected: {self.dataset_path}")
             
+
             try:
-                self.dataframe = pd.read_csv(file_path)
-                logging.info("CSV file loaded into DataFrame successfully.")
+                # Automated dataset selection for training
+                if "iris" in file_path.lower():
+                    self.dataframe = pd.read_csv(
+                        "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data",
+                        header=None,
+                        names=["sepal_len","sepal_wid","petal_len","petal_wid","class"]
+                    )
+                elif "titanic" in file_path.lower():
+                    self.dataframe = pd.read_csv(
+                        "https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv"
+                    )
+                elif "adult" in file_path.lower():
+                    self.dataframe = pd.read_csv(
+                        "https://archive.ics.uci.edu/ml/machine-learning-databases/adult/adult.data",
+                        header=None,
+                        na_values="?"
+                    )
+                elif "mnist" in file_path.lower():
+                    from sklearn.datasets import fetch_openml
+                    X, y = fetch_openml("mnist_784", as_frame=False, parser="auto", cache=False, return_X_y=True)
+                    import numpy as np
+                    self.dataframe = pd.DataFrame(X)
+                    self.dataframe["target"] = y
+                elif "boston" in file_path.lower():
+                    from openml import datasets
+                    boston = datasets.get_dataset(531).get_data()
+                    self.dataframe = boston[0]
+                elif "california" in file_path.lower() or "housing" in file_path.lower():
+                    from sklearn.datasets import fetch_california_housing
+                    cal = fetch_california_housing(as_frame=True).frame
+                    self.dataframe = cal
+                elif "bike" in file_path.lower():
+                    self.dataframe = pd.read_csv(
+                        "https://archive.ics.uci.edu/ml/machine-learning-databases/00275/Bike-Sharing-Dataset/day.csv"
+                    )
+                elif "news" in file_path.lower() or "20newsgroups" in file_path.lower():
+                    from sklearn.datasets import fetch_20newsgroups
+                    news = fetch_20newsgroups(subset="all", remove=("headers","footers","quotes"))
+                    import pandas as pd
+                    self.dataframe = pd.DataFrame({"text": news.data, "target": news.target})
+                elif "sms" in file_path.lower() or "spam" in file_path.lower():
+                    self.dataframe = pd.read_csv(
+                        "https://archive.ics.uci.edu/ml/machine-learning-databases/00228/smsspamcollection.zip",
+                        compression="zip",
+                        sep="\t",
+                        names=["label","text"]
+                    )
+                elif "heart" in file_path.lower() or "cleveland" in file_path.lower():
+                    self.dataframe = pd.read_csv(
+                        "https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data",
+                        header=None,
+                        na_values="?"
+                    )
+                elif "cancer" in file_path.lower() or "breast" in file_path.lower():
+                    from sklearn.datasets import load_breast_cancer
+                    bc = load_breast_cancer(as_frame=True).frame
+                    self.dataframe = bc
+                elif "synthetic" in file_path.lower() or "make_classification" in file_path.lower():
+                    from sklearn.datasets import make_classification
+                    X_clf, y_clf = make_classification(n_samples=10000, n_features=20)
+                    import pandas as pd
+                    self.dataframe = pd.DataFrame(X_clf)
+                    self.dataframe["target"] = y_clf
+                elif "wine" in file_path.lower():
+                    self.dataframe = pd.read_csv(
+                        "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv",
+                        sep=";"
+                    )
+                elif "credit" in file_path.lower() or "fraud" in file_path.lower():
+                    self.dataframe = pd.read_csv(
+                        "https://storage.googleapis.com/download.tensorflow.org/data/creditcard.csv"
+                    )
+                else:
+                    self.dataframe = pd.read_csv(file_path)
+                logging.info("Dataset loaded into DataFrame successfully.")
                 self.analyze_and_update_ui()
                 self.start_automl_button.setEnabled(True)
                 self.dataset_loaded.emit(self.dataset_path)
             except Exception as e:
-                logging.error(f"Failed to load or analyze CSV: {e}")
+                logging.error(f"Failed to load or analyze dataset: {e}")
                 self.dataset_path_label.setText(f"Error: Could not load file. See log for details.")
                 self.start_automl_button.setEnabled(False)
 
