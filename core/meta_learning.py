@@ -146,3 +146,15 @@ class MetaLearner:
         
         logging.info(f"Generated {len(ranked_list)} recommendations based on top {num_to_consider} similar projects.")
         return ranked_list
+
+    def add_experience(self, new_experience: dict, experiences_path='data/past_experiences.json'):
+        """
+        Adds a new experience to the database and saves it.
+        """
+        self.experiences.append(new_experience)
+        try:
+            with open(experiences_path, 'w') as f:
+                json.dump(self.experiences, f, indent=4)
+            logging.info(f"Successfully added new experience and saved to {experiences_path}")
+        except IOError as e:
+            logging.error(f"Could not write to experiences file at {experiences_path}: {e}")

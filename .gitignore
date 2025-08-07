@@ -2,6 +2,7 @@
 project_plan.txt
 .env
 kaggle.json
+logo.jpg
 automl.log
 core/__pycache__/
 tests/__pycache__/

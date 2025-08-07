@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog,
     QProgressBar, QTableWidget, QTableWidgetItem, QGroupBox, QFormLayout
 )
+from PyQt6.QtCore import Qt
 from PyQt6.QtCore import pyqtSignal
 from core.data_analysis import DataAnalyzer
 
@@ -25,6 +26,13 @@ class DashboardWidget(QWidget):
     def _init_ui(self):
         """Initialize the UI components."""
         main_layout = QVBoxLayout(self)
+        # Add logo at the top
+        from PyQt6.QtGui import QPixmap
+        logo_label = QLabel()
+        pixmap = QPixmap("logo.jpg")
+        logo_label.setPixmap(pixmap.scaledToHeight(64))
+        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(logo_label)
         title_label = QLabel("AutoML Dashboard (Dask Enabled)")
         title_label.setStyleSheet("font-size: 24px; font-weight: bold;")
         main_layout.addWidget(title_label)
@@ -68,12 +76,15 @@ class DashboardWidget(QWidget):
         main_layout.addWidget(self.start_automl_button)
 
         progress_group = QGroupBox("Workflow Status")
-        progress_layout = QVBoxLayout()
+        progress_layout = QFormLayout()
+        self.status_label = QLabel("Idle")
         self.progress_label = QLabel("Waiting to start...")
         self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        progress_layout.addWidget(self.progress_label)
-        progress_layout.addWidget(self.progress_bar)
+        
+        progress_layout.addRow("Status:", self.status_label)
+        progress_layout.addRow("Progress:", self.progress_label)
+        progress_layout.addRow(self.progress_bar)
+        
         progress_group.setLayout(progress_layout)
         main_layout.addWidget(progress_group)
         main_layout.addStretch()
@@ -84,18 +95,18 @@ class DashboardWidget(QWidget):
         file_path, _ = QFileDialog.getOpenFileName(self, "Open Dataset File", "", "CSV Files (*.csv)")
         if file_path:
             self.dataset_path = file_path
-            self.dataset_path_label.setText(f"Loading: {self.dataset_path}")
+            self.update_status(f"Loading: {self.dataset_path}")
             try:
-                # Use Dask to read the CSV
                 self.dataframe = dd.read_csv(file_path, engine='pyarrow')
                 logging.info(f"Dataset loaded into Dask DataFrame. Partitions: {self.dataframe.npartitions}")
-                self.dataset_path_label.setText(f"Loaded: {self.dataset_path}")
+                self.update_status("Analyzing dataset...")
                 self.analyze_and_update_ui()
                 self.start_automl_button.setEnabled(True)
                 self.dataset_loaded.emit(self.dataset_path)
+                self.update_status("Ready")
             except Exception as e:
                 logging.error(f"Failed to load dataset with Dask: {e}")
-                self.dataset_path_label.setText(f"Error: Could not load file.")
+                self.update_status(f"Error: Could not load file.")
                 self.start_automl_button.setEnabled(False)
 
     def analyze_and_update_ui(self):
@@ -103,7 +114,6 @@ class DashboardWidget(QWidget):
         if self.dataframe is None: return
         logging.info("Starting data analysis with Dask...")
         
-        # This will now operate on the Dask DataFrame
         self.dataset_profile = self.core_analyzer.analyze_dataset(self.dataframe)
         
         self.rows_label.setText(str(self.dataset_profile.get('n_rows', 'N/A')))
@@ -114,6 +124,7 @@ class DashboardWidget(QWidget):
 
     def update_recommendations(self):
         if not self.dataset_profile: return
+        self.update_status("Generating recommendations...")
         self.recommendations = self.meta_learner.recommend_algorithms(self.dataset_profile)
         if self.recommendations:
             source_projects = set(p for r in self.recommendations for p in r['source_projects'])
@@ -127,15 +138,22 @@ class DashboardWidget(QWidget):
             self.reco_table.setItem(i, 2, QTableWidgetItem(", ".join(reco['preprocessing'])))
             self.reco_table.setItem(i, 3, QTableWidgetItem(", ".join(reco['source_projects'])))
         self.reco_table.resizeColumnsToContents()
+        self.update_status("Ready")
+
+    def update_status(self, message):
+        self.status_label.setText(message)
 
     def update_progress(self, value, message):
-        if not self.progress_bar.isVisible():
-            self.progress_bar.setVisible(True)
         self.progress_bar.setValue(value)
         self.progress_label.setText(message)
         if value == 100:
             self.progress_label.setText("Workflow complete.")
+            self.update_status("Finished")
 
     def set_ui_enabled(self, enabled):
         self.upload_button.setEnabled(enabled)
         self.start_automl_button.setEnabled(enabled)
+        if not enabled:
+            self.update_status("Running AutoML...")
+        else:
+            self.update_status("Idle")

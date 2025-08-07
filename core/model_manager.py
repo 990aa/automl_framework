@@ -1,5 +1,7 @@
 # core/model_manager.py
 import time
+import os
+import joblib
 from dask_ml.linear_model import LogisticRegression
 from dask_ml.ensemble import RandomForestClassifier
 
@@ -8,12 +10,15 @@ from dask_ml.ensemble import RandomForestClassifier
 # would require more specialized handling or might not be available for distributed training.
 
 class ModelManager:
-    def __init__(self):
+    def __init__(self, model_dir='trained_models'):
         self.models = {
             "RandomForestClassifier": RandomForestClassifier,
             "LogisticRegression": LogisticRegression,
             # Add other Dask-ML compatible models here
         }
+        self.model_dir = model_dir
+        if not os.path.exists(self.model_dir):
+            os.makedirs(self.model_dir)
 
     def get_estimator(self, name):
         """Instantiates a Dask-ML estimator from a string name."""
@@ -47,3 +52,9 @@ class ModelManager:
         # This time measures the time to construct the graph, not compute it
         training_time = end_time - start_time
         return pipeline, training_time
+
+    def save_pipeline(self, pipeline, filename):
+        """Saves a trained pipeline to a file."""
+        filepath = os.path.join(self.model_dir, filename)
+        joblib.dump(pipeline, filepath)
+        return filepath

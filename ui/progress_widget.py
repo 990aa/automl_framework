@@ -1,7 +1,8 @@
 # ui/progress_widget.py
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QProgressBar, QTextEdit, QLabel
-from PyQt6.QtCore import pyqtSlot
+from PyQt6.QtCore import pyqtSlot, Qt
+from PyQt6.QtGui import QPixmap
 
 class ProgressWidget(QWidget):
     """A widget to display AutoML progress with a progress bar and log."""
@@ -14,6 +15,14 @@ class ProgressWidget(QWidget):
     def _init_ui(self):
         """Initialize the UI components."""
         layout = QVBoxLayout(self)
+        # Add logo at the top
+    from PyQt6.QtGui import QPixmap
+    from PyQt6.QtCore import Qt
+    logo_label = QLabel()
+    pixmap = QPixmap("logo.jpg")
+    logo_label.setPixmap(pixmap.scaledToHeight(48))
+    logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    layout.addWidget(logo_label)
 
         self.progress_label = QLabel("Overall Progress:")
         layout.addWidget(self.progress_label)
