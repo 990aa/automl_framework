@@ -1,0 +1,10 @@
+.venv/
+project_plan.txt
+.env
+kaggle.json
+automl.log
+core/__pycache__/
+tests/__pycache__/
+tests/core/__pycache__/
+utils/__pycache__/
+ui/__pycache__/

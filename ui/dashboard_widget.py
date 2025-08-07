@@ -1,4 +1,4 @@
-import pandas as pd
+import dask.dataframe as dd
 import logging
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog,
@@ -14,8 +14,9 @@ class DashboardWidget(QWidget):
     def __init__(self, meta_learner, model_manager, parent=None):
         super().__init__(parent)
         self.dataset_path = None
-        self.dataframe = None
-        self.dataset_profile = None  # To store the analysis results
+        self.dataframe = None # This will be a Dask DataFrame
+        self.dataset_profile = None
+        self.recommendations = []
         self.core_analyzer = DataAnalyzer()
         self.meta_learner = meta_learner
         self.model_manager = model_manager
@@ -24,49 +25,34 @@ class DashboardWidget(QWidget):
     def _init_ui(self):
         """Initialize the UI components."""
         main_layout = QVBoxLayout(self)
-
-        # --- Title ---
-        title_label = QLabel("AutoML Dashboard")
+        title_label = QLabel("AutoML Dashboard (Dask Enabled)")
         title_label.setStyleSheet("font-size: 24px; font-weight: bold;")
         main_layout.addWidget(title_label)
 
-        # --- File Operations Section ---
+        # ... (rest of the UI setup is the same)
         file_ops_group = QGroupBox("File Operations")
         file_ops_layout = QVBoxLayout()
-
         self.upload_button = QPushButton("Upload Dataset (.csv)")
         self.upload_button.clicked.connect(self.upload_dataset)
         file_ops_layout.addWidget(self.upload_button)
-
-        self.load_project_button = QPushButton("Load Previous Project")
-        self.load_project_button.setEnabled(False) # For later implementation
-        file_ops_layout.addWidget(self.load_project_button)
-
         self.dataset_path_label = QLabel("No dataset loaded.")
-        self.dataset_path_label.setWordWrap(True)
         file_ops_layout.addWidget(self.dataset_path_label)
-
         file_ops_group.setLayout(file_ops_layout)
         main_layout.addWidget(file_ops_group)
 
-        # --- Dataset Info Section ---
         dataset_info_group = QGroupBox("Dataset Info")
         dataset_info_layout = QFormLayout()
-
         self.rows_label = QLabel("N/A")
         self.features_label = QLabel("N/A")
         self.problem_type_label = QLabel("N/A")
-        self.similarity_label = QLabel("N/A") # For meta-learning in a future phase
-
+        self.similarity_label = QLabel("N/A")
         dataset_info_layout.addRow("Rows:", self.rows_label)
         dataset_info_layout.addRow("Features:", self.features_label)
         dataset_info_layout.addRow("Problem Type:", self.problem_type_label)
         dataset_info_layout.addRow("Similarity Score:", self.similarity_label)
-
         dataset_info_group.setLayout(dataset_info_layout)
         main_layout.addWidget(dataset_info_group)
 
-        # --- Recommendations Section ---
         reco_group = QGroupBox("Algorithm Recommendations")
         reco_layout = QVBoxLayout()
         self.reco_table = QTableWidget()
@@ -76,15 +62,12 @@ class DashboardWidget(QWidget):
         reco_group.setLayout(reco_layout)
         main_layout.addWidget(reco_group)
 
-        # --- AutoML Control Section ---
         self.start_automl_button = QPushButton("Start AutoML Process")
-        self.start_automl_button.clicked.connect(self.start_automl_process)
-        self.start_automl_button.setEnabled(False) # Disabled until dataset is loaded
+        self.start_automl_button.setEnabled(False)
         self.start_automl_button.setStyleSheet("font-size: 16px; padding: 10px;")
         main_layout.addWidget(self.start_automl_button)
 
-        # --- Progress Bar Section ---
-        progress_group = QGroupBox("AutoML Progress")
+        progress_group = QGroupBox("Workflow Status")
         progress_layout = QVBoxLayout()
         self.progress_label = QLabel("Waiting to start...")
         self.progress_bar = QProgressBar()
@@ -93,155 +76,66 @@ class DashboardWidget(QWidget):
         progress_layout.addWidget(self.progress_bar)
         progress_group.setLayout(progress_layout)
         main_layout.addWidget(progress_group)
+        main_layout.addStretch()
 
-        main_layout.addStretch() # Pushes everything to the top
 
     def upload_dataset(self):
-        """Open a file dialog, load data, and trigger analysis."""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Open Dataset File", "", "CSV Files (*.csv);;All Files (*)"
-        )
+        """Open a file dialog, load data into a Dask DataFrame, and trigger analysis."""
+        file_path, _ = QFileDialog.getOpenFileName(self, "Open Dataset File", "", "CSV Files (*.csv)")
         if file_path:
             self.dataset_path = file_path
-            self.dataset_path_label.setText(f"Loaded: {self.dataset_path}")
-            logging.info(f"Dataset selected: {self.dataset_path}")
-            
-
+            self.dataset_path_label.setText(f"Loading: {self.dataset_path}")
             try:
-                # Automated dataset selection for training
-                if "iris" in file_path.lower():
-                    self.dataframe = pd.read_csv(
-                        "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data",
-                        header=None,
-                        names=["sepal_len","sepal_wid","petal_len","petal_wid","class"]
-                    )
-                elif "titanic" in file_path.lower():
-                    self.dataframe = pd.read_csv(
-                        "https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv"
-                    )
-                elif "adult" in file_path.lower():
-                    self.dataframe = pd.read_csv(
-                        "https://archive.ics.uci.edu/ml/machine-learning-databases/adult/adult.data",
-                        header=None,
-                        na_values="?"
-                    )
-                elif "mnist" in file_path.lower():
-                    from sklearn.datasets import fetch_openml
-                    X, y = fetch_openml("mnist_784", as_frame=False, parser="auto", cache=False, return_X_y=True)
-                    import numpy as np
-                    self.dataframe = pd.DataFrame(X)
-                    self.dataframe["target"] = y
-                elif "boston" in file_path.lower():
-                    from openml import datasets
-                    boston = datasets.get_dataset(531).get_data()
-                    self.dataframe = boston[0]
-                elif "california" in file_path.lower() or "housing" in file_path.lower():
-                    from sklearn.datasets import fetch_california_housing
-                    cal = fetch_california_housing(as_frame=True).frame
-                    self.dataframe = cal
-                elif "bike" in file_path.lower():
-                    self.dataframe = pd.read_csv(
-                        "https://archive.ics.uci.edu/ml/machine-learning-databases/00275/Bike-Sharing-Dataset/day.csv"
-                    )
-                elif "news" in file_path.lower() or "20newsgroups" in file_path.lower():
-                    from sklearn.datasets import fetch_20newsgroups
-                    news = fetch_20newsgroups(subset="all", remove=("headers","footers","quotes"))
-                    import pandas as pd
-                    self.dataframe = pd.DataFrame({"text": news.data, "target": news.target})
-                elif "sms" in file_path.lower() or "spam" in file_path.lower():
-                    self.dataframe = pd.read_csv(
-                        "https://archive.ics.uci.edu/ml/machine-learning-databases/00228/smsspamcollection.zip",
-                        compression="zip",
-                        sep="\t",
-                        names=["label","text"]
-                    )
-                elif "heart" in file_path.lower() or "cleveland" in file_path.lower():
-                    self.dataframe = pd.read_csv(
-                        "https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data",
-                        header=None,
-                        na_values="?"
-                    )
-                elif "cancer" in file_path.lower() or "breast" in file_path.lower():
-                    from sklearn.datasets import load_breast_cancer
-                    bc = load_breast_cancer(as_frame=True).frame
-                    self.dataframe = bc
-                elif "synthetic" in file_path.lower() or "make_classification" in file_path.lower():
-                    from sklearn.datasets import make_classification
-                    X_clf, y_clf = make_classification(n_samples=10000, n_features=20)
-                    import pandas as pd
-                    self.dataframe = pd.DataFrame(X_clf)
-                    self.dataframe["target"] = y_clf
-                elif "wine" in file_path.lower():
-                    self.dataframe = pd.read_csv(
-                        "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv",
-                        sep=";"
-                    )
-                elif "credit" in file_path.lower() or "fraud" in file_path.lower():
-                    self.dataframe = pd.read_csv(
-                        "https://storage.googleapis.com/download.tensorflow.org/data/creditcard.csv"
-                    )
-                else:
-                    self.dataframe = pd.read_csv(file_path)
-                logging.info("Dataset loaded into DataFrame successfully.")
+                # Use Dask to read the CSV
+                self.dataframe = dd.read_csv(file_path, engine='pyarrow')
+                logging.info(f"Dataset loaded into Dask DataFrame. Partitions: {self.dataframe.npartitions}")
+                self.dataset_path_label.setText(f"Loaded: {self.dataset_path}")
                 self.analyze_and_update_ui()
                 self.start_automl_button.setEnabled(True)
                 self.dataset_loaded.emit(self.dataset_path)
             except Exception as e:
-                logging.error(f"Failed to load or analyze dataset: {e}")
-                self.dataset_path_label.setText(f"Error: Could not load file. See log for details.")
+                logging.error(f"Failed to load dataset with Dask: {e}")
+                self.dataset_path_label.setText(f"Error: Could not load file.")
                 self.start_automl_button.setEnabled(False)
 
-
     def analyze_and_update_ui(self):
-        """Run the data analyzer and update the UI with the results."""
-        if self.dataframe is None:
-            return
+        """Run the data analyzer on the Dask DataFrame and update the UI."""
+        if self.dataframe is None: return
+        logging.info("Starting data analysis with Dask...")
         
-        logging.info("Starting data analysis...")
+        # This will now operate on the Dask DataFrame
         self.dataset_profile = self.core_analyzer.analyze_dataset(self.dataframe)
         
-        # Update UI labels with analysis results
         self.rows_label.setText(str(self.dataset_profile.get('n_rows', 'N/A')))
         self.features_label.setText(str(self.dataset_profile.get('n_features', 'N/A')))
         self.problem_type_label.setText(str(self.dataset_profile.get('problem_type', 'Unknown')))
-        
-        logging.info("UI updated with dataset analysis results.")
-        
-        # Now, get meta-learning recommendations
+        logging.info("UI updated with dataset analysis.")
         self.update_recommendations()
 
     def update_recommendations(self):
-        """Use the meta-learner to find and display recommendations."""
-        if not self.dataset_profile:
-            return
-        
-        # Get ranked list of recommendations
+        if not self.dataset_profile: return
         self.recommendations = self.meta_learner.recommend_algorithms(self.dataset_profile)
-        
-        # Update the summary label
         if self.recommendations:
-            # Count unique source projects from the top recommendations
-            source_projects = set()
-            for reco in self.recommendations:
-                source_projects.update(reco['source_projects'])
+            source_projects = set(p for r in self.recommendations for p in r['source_projects'])
             self.similarity_label.setText(f"Similar to {len(source_projects)} past project(s)")
         else:
             self.similarity_label.setText("No similar projects found.")
-
-        # Update the recommendations table
         self.reco_table.setRowCount(len(self.recommendations))
         for i, reco in enumerate(self.recommendations):
             self.reco_table.setItem(i, 0, QTableWidgetItem(str(i + 1)))
             self.reco_table.setItem(i, 1, QTableWidgetItem(reco['model']))
             self.reco_table.setItem(i, 2, QTableWidgetItem(", ".join(reco['preprocessing'])))
             self.reco_table.setItem(i, 3, QTableWidgetItem(", ".join(reco['source_projects'])))
-        
         self.reco_table.resizeColumnsToContents()
 
+    def update_progress(self, value, message):
+        if not self.progress_bar.isVisible():
+            self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(value)
+        self.progress_label.setText(message)
+        if value == 100:
+            self.progress_label.setText("Workflow complete.")
 
-    def start_automl_process(self):
-        """Placeholder for starting the AutoML process."""
-        logging.info("Starting AutoML process...")
-        # This will be connected to the core logic later
-        self.start_automl_button.setEnabled(False)
-        self.upload_button.setEnabled(False)
+    def set_ui_enabled(self, enabled):
+        self.upload_button.setEnabled(enabled)
+        self.start_automl_button.setEnabled(enabled)

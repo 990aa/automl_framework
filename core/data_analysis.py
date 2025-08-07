@@ -1,142 +1,80 @@
+import dask.dataframe as dd
 import pandas as pd
-import numpy as np
 import logging
 
 class DataAnalyzer:
     """
-    Analyzes a dataset to extract metadata, feature profiles, and suggest a problem type.
+    Analyzes a Dask DataFrame to extract metadata and identify key characteristics.
     """
     def __init__(self, target_candidates=None):
-        if target_candidates is None:
-            self.target_candidates = ['target', 'label', 'y', 'class', 'output']
-        else:
-            self.target_candidates = target_candidates
-        logging.info("DataAnalyzer initialized.")
+        self.target_candidates = target_candidates or ['target', 'class', 'label', 'y']
 
-    def analyze_dataset(self, df: pd.DataFrame):
+    def analyze_dataset(self, ddf):
         """
-        Performs a comprehensive analysis of the given DataFrame.
+        Performs a full analysis of a Dask DataFrame.
+
+        Args:
+            ddf (dd.DataFrame): The Dask DataFrame to analyze.
+
+        Returns:
+            dict: A dictionary summarizing the dataset's properties.
         """
-        logging.info(f"Starting dataset analysis for a dataframe with shape {df.shape}.")
+        logging.info("Analyzing Dask DataFrame...")
         
-        feature_profiles = self._create_feature_profiles(df)
-        target_column, problem_type = self._infer_problem_type(df, feature_profiles)
+        # Persist the dataframe in memory for more efficient computation
+        ddf = ddf.persist()
 
-        dataset_profile = {
-            'n_rows': df.shape[0],
-            'n_features': df.shape[1],
-            'missing_value_info': self._analyze_missing_values(df),
-            'feature_profiles': feature_profiles,
-            'data_quality': self._assess_data_quality(df, target_column),
+        n_rows = len(ddf)
+        n_features = len(ddf.columns)
+        
+        # Compute column-wise stats
+        missing_values = ddf.isnull().sum().compute()
+        unique_values = ddf.nunique().compute()
+        
+        # Identify target column
+        target_column, problem_type = self._identify_target_and_problem_type(ddf, unique_values)
+
+        summary = {
+            'n_rows': n_rows,
+            'n_features': n_features - 1 if target_column else n_features,
             'target_column': target_column,
-            'problem_type': problem_type
+            'problem_type': problem_type,
+            'missing_values': missing_values.to_dict(),
+            'unique_values': unique_values.to_dict(),
+            'columns': ddf.columns.tolist(),
+            'dtypes': ddf.dtypes.to_dict()
         }
         
-        logging.info(f"Dataset analysis complete. Inferred problem type: {problem_type}")
-        return dataset_profile
+        logging.info(f"Analysis complete. Target: '{target_column}', Problem: '{problem_type}'")
+        return summary
 
-    def _analyze_missing_values(self, df: pd.DataFrame):
-        """Calculates missing value statistics."""
-        total_missing = df.isnull().sum().sum()
-        total_cells = np.prod(df.shape)
-        overall_missing_ratio = total_missing / total_cells
-        
-        missing_per_column = {col: df[col].isnull().sum() for col in df.columns}
-        missing_ratio_per_column = {col: val / df.shape[0] for col, val in missing_per_column.items()}
-
-        return {
-            'overall_missing_ratio': overall_missing_ratio,
-            'missing_ratio_per_column': missing_ratio_per_column
-        }
-
-    def _create_feature_profiles(self, df: pd.DataFrame):
-        """Creates a detailed profile for each feature."""
-        profiles = {}
-        for col in df.columns:
-            dtype = df[col].dtype
-            nunique = df[col].nunique()
-            missing_ratio = df[col].isnull().sum() / len(df)
-            
-            profile = {'dtype': str(dtype), 'nunique': nunique, 'missing_ratio': missing_ratio}
-
-            if pd.api.types.is_numeric_dtype(dtype):
-                if nunique <= 2: # Binary is always categorical
-                    profile['type'] = 'categorical'
-                elif pd.api.types.is_integer_dtype(dtype) and nunique < 20: # Low-cardinality integer is categorical
-                    profile['type'] = 'categorical'
-                else:
-                    profile['type'] = 'numerical'
-                    profile['std'] = df[col].std()
-                    profile['min'] = df[col].min()
-                    profile['max'] = df[col].max()
-            elif pd.api.types.is_string_dtype(dtype) or pd.api.types.is_object_dtype(dtype):
-                avg_len = df[col].astype(str).str.len().mean()
-                if avg_len > 25 and nunique / len(df) > 0.8: # High unique, long strings
-                     profile['type'] = 'text'
-                else:
-                     profile['type'] = 'categorical'
-            else:
-                profile['type'] = 'other'
-            
-            profiles[col] = profile
-        return profiles
-
-    def _infer_problem_type(self, df: pd.DataFrame, feature_profiles):
-        """Infers the problem type (Classification/Regression) based on the target column."""
-        target_column = None
+    def _identify_target_and_problem_type(self, ddf, unique_values):
+        """
+        Heuristically identifies the target column and problem type.
+        """
+        # 1. Check for explicit candidates
         for col_name in self.target_candidates:
-            if col_name in df.columns:
-                target_column = col_name
-                break
-        
-        if not target_column:
-            # If no candidate found, assume unsupervised
-            return None, 'Unsupervised'
+            if col_name in ddf.columns:
+                return self._classify_column(ddf[col_name], unique_values[col_name])
 
-        target_profile = feature_profiles[target_column]
-        
-        # If the identified target is numeric (but not low-cardinality int), it's regression.
-        if target_profile['type'] == 'numerical':
-            return target_column, 'Regression'
-        
-        # Otherwise, it's classification (categorical, binary, etc.)
-        if target_profile['type'] == 'categorical':
-            return target_column, 'Classification'
-        
-        return target_column, 'Unknown'
+        # 2. Fallback: guess based on column properties (e.g., last column)
+        last_col = ddf.columns[-1]
+        return self._classify_column(ddf[last_col], unique_values[last_col])
 
-    def _assess_data_quality(self, df: pd.DataFrame, target_column: str = None):
-        """Performs basic data quality checks."""
-        quality_report = {}
+    def _classify_column(self, column_series, n_unique):
+        """
+        Determines problem type based on a potential target column's properties.
+        """
+        col_name = column_series.name
         
-        # Outlier detection using IQR (on non-target columns)
-        outlier_info = {}
-        numeric_cols = df.select_dtypes(include=np.number).columns
-        if target_column and target_column in numeric_cols:
-            numeric_cols = numeric_cols.drop(target_column)
-
-        for col in numeric_cols:
-            Q1 = df[col].quantile(0.25)
-            Q3 = df[col].quantile(0.75)
-            IQR = Q3 - Q1
-            if IQR > 0: # Avoid division by zero or constant columns
-                outlier_condition = ((df[col] < (Q1 - 1.5 * IQR)) | (df[col] > (Q3 + 1.5 * IQR)))
-                outliers = df[col][outlier_condition]
-                if not outliers.empty:
-                    outlier_info[col] = {'count': len(outliers), 'ratio': len(outliers) / len(df)}
-        quality_report['outliers'] = outlier_info
-
-        # Near-zero variance features
-        near_zero_var = []
-        for col in df.columns:
-            if col == target_column: continue # Don't check target column
+        # Regression if numeric and has many unique values
+        if pd.api.types.is_numeric_dtype(column_series.dtype) and n_unique > 50:
+            return col_name, 'regression'
+        
+        # Classification if categorical or integer with few unique values
+        if pd.api.types.is_categorical_dtype(column_series.dtype) or \
+           (pd.api.types.is_integer_dtype(column_series.dtype) and n_unique <= 50):
+            return col_name, 'classification'
             
-            nunique = df[col].nunique()
-            if nunique <= 1:
-                near_zero_var.append(col)
-            elif nunique / len(df) < 0.01: # Less than 1% unique values
-                near_zero_var.append(col)
-
-        quality_report['near_zero_variance_features'] = near_zero_var
-        
-        return quality_report
+        # Default fallback
+        return col_name, 'unknown'
