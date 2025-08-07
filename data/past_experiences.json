@@ -1,0 +1,74 @@
+[
+    {
+        "project_name": "Titanic Survival Prediction",
+        "dataset_profile": {
+            "n_rows": 891,
+            "n_features": 12,
+            "problem_type": "Classification",
+            "target_column": "Survived",
+            "feature_profiles": {
+                "numerical": 6,
+                "categorical": 5,
+                "text": 1
+            },
+            "missing_value_info": {
+                "overall_missing_ratio": 0.10
+            }
+        },
+        "best_pipeline": {
+            "preprocessing": ["SimpleImputer", "OneHotEncoder"],
+            "model": "RandomForestClassifier",
+            "performance": {
+                "accuracy": 0.82
+            }
+        }
+    },
+    {
+        "project_name": "Boston Housing Prices",
+        "dataset_profile": {
+            "n_rows": 506,
+            "n_features": 14,
+            "problem_type": "Regression",
+            "target_column": "MEDV",
+            "feature_profiles": {
+                "numerical": 13,
+                "categorical": 1,
+                "text": 0
+            },
+            "missing_value_info": {
+                "overall_missing_ratio": 0.0
+            }
+        },
+        "best_pipeline": {
+            "preprocessing": ["StandardScaler"],
+            "model": "GradientBoostingRegressor",
+            "performance": {
+                "r2_score": 0.88
+            }
+        }
+    },
+    {
+        "project_name": "Iris Flower Classification",
+        "dataset_profile": {
+            "n_rows": 150,
+            "n_features": 5,
+            "problem_type": "Classification",
+            "target_column": "species",
+            "feature_profiles": {
+                "numerical": 4,
+                "categorical": 1,
+                "text": 0
+            },
+            "missing_value_info": {
+                "overall_missing_ratio": 0.0
+            }
+        },
+        "best_pipeline": {
+            "preprocessing": [],
+            "model": "LogisticRegression",
+            "performance": {
+                "accuracy": 0.97
+            }
+        }
+    }
+]
