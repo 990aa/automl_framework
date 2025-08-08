@@ -8,6 +8,12 @@ class ProgressWidget(QWidget):
     """A widget to display AutoML progress with a progress bar and log."""
 
     def __init__(self, parent=None):
+        """
+        Initializes the ProgressWidget.
+
+        Args:
+            parent (QWidget, optional): The parent widget. Defaults to None.
+        """
         super().__init__(parent)
         self.setWindowTitle("AutoML Progress")
         self._init_ui()
@@ -16,13 +22,13 @@ class ProgressWidget(QWidget):
         """Initialize the UI components."""
         layout = QVBoxLayout(self)
         # Add logo at the top
-    from PyQt6.QtGui import QPixmap
-    from PyQt6.QtCore import Qt
-    logo_label = QLabel()
-    pixmap = QPixmap("logo.jpg")
-    logo_label.setPixmap(pixmap.scaledToHeight(48))
-    logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    layout.addWidget(logo_label)
+        from PyQt6.QtGui import QPixmap
+        from PyQt6.QtCore import Qt
+        logo_label = QLabel()
+        pixmap = QPixmap("logo.jpg")
+        logo_label.setPixmap(pixmap.scaledToHeight(48))
+        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(logo_label)
 
         self.progress_label = QLabel("Overall Progress:")
         layout.addWidget(self.progress_label)
@@ -43,7 +49,13 @@ class ProgressWidget(QWidget):
 
     @pyqtSlot(int, str)
     def update_progress(self, value, message):
-        """Update the overall progress bar and its label."""
+        """
+        Update the overall progress bar and its label.
+
+        Args:
+            value (int): The progress value (0-100).
+            message (str): The message to display next to the progress bar.
+        """
         self.progress_bar.setValue(value)
         # The message from the main app's signal is more for the dashboard,
         # so we'll just show a generic percentage here.
@@ -52,7 +64,12 @@ class ProgressWidget(QWidget):
 
     @pyqtSlot(str)
     def add_log_message(self, message):
-        """Append a message to the log area."""
+        """
+        Append a message to the log area.
+
+        Args:
+            message (str): The message to append to the log.
+        """
         self.log_area.append(message)
         self.log_area.verticalScrollBar().setValue(self.log_area.verticalScrollBar().maximum())
 

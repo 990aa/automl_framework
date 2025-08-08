@@ -6,7 +6,13 @@ from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_sc
 from core.resource_manager import get_system_info, estimate_training_time
 
 class Optimizer:
+    """
+    Handles hyperparameter optimization for machine learning pipelines.
+    """
     def __init__(self):
+        """
+        Initializes the Optimizer with default hyperparameter grids.
+        """
         # Grids are defined for Dask-ML compatible models
         self.default_hyperparameter_grids = {
             "RandomForestClassifier": {
@@ -19,6 +25,15 @@ class Optimizer:
         }
 
     def get_default_grid(self, estimator_name):
+        """
+        Gets the default hyperparameter grid for a given estimator.
+
+        Args:
+            estimator_name (str): The name of the estimator.
+
+        Returns:
+            dict: The hyperparameter grid, or None if not found.
+        """
         grid = self.default_hyperparameter_grids.get(estimator_name)
         if not grid:
             return None
@@ -29,6 +44,21 @@ class Optimizer:
         """
         Performs HPO using Dask-ML's GridSearchCV.
         A logger_callback can be passed to stream live updates.
+
+        Args:
+            pipeline_template (sklearn.pipeline.Pipeline): The pipeline to optimize.
+            X_train (dask.dataframe.DataFrame): The training features.
+            y_train (dask.dataframe.DataFrame): The training target.
+            X_test (dask.dataframe.DataFrame): The testing features.
+            y_test (dask.dataframe.DataFrame): The testing target.
+            search_grid (dict): The hyperparameter grid to search.
+            problem_type (str): The type of problem ('classification' or 'regression').
+            cv (int): The number of cross-validation folds.
+            use_pareto (bool): Whether to use Pareto optimization.
+            logger_callback (function): A function to call with log messages.
+
+        Returns:
+            dict: A dictionary containing the results of the optimization.
         """
         def log(message):
             if logger_callback:
@@ -51,10 +81,12 @@ class Optimizer:
             y_test_computed = y_test.compute()
             accuracy = accuracy_score(y_test_computed, y_pred)
             f1 = f1_score(y_test_computed, y_pred, average='weighted' if problem_type == 'classification' else 'micro')
+            precision = precision_score(y_test_computed, y_pred, average='weighted' if problem_type == 'classification' else 'micro', zero_division=0)
+            recall = recall_score(y_test_computed, y_pred, average='weighted' if problem_type == 'classification' else 'micro', zero_division=0)
 
             return {
                 'best_pipeline': pipeline_template, 'best_params': None, 'best_cv_score': None,
-                'test_accuracy': accuracy, 'test_f1_score': f1,
+                'test_accuracy': accuracy, 'test_f1_score': f1, 'test_precision': precision, 'test_recall': recall,
                 'hpo_time': 0, 'training_time': train_time
             }
 
@@ -81,6 +113,8 @@ class Optimizer:
         y_test_computed = y_test.compute()
         test_accuracy = accuracy_score(y_test_computed, y_pred)
         test_f1 = f1_score(y_test_computed, y_pred, average='weighted' if problem_type == 'classification' else 'micro')
+        test_precision = precision_score(y_test_computed, y_pred, average='weighted'if problem_type == 'classification' else 'micro', zero_division=0)
+        test_recall = recall_score(y_test_computed, y_pred, average='weighted' if problem_type == 'classification' else 'micro', zero_division=0)
         log("Evaluation complete.")
 
         return {
@@ -89,6 +123,8 @@ class Optimizer:
             'best_cv_score': grid_search.best_score_,
             'test_accuracy': test_accuracy,
             'test_f1_score': test_f1,
+            'test_precision': test_precision,
+            'test_recall': test_recall,
             'hpo_time': hpo_time,
             'training_time': hpo_time
         }
@@ -96,6 +132,12 @@ class Optimizer:
     def _get_pareto_optimal_model(self, grid_search):
         """
         Selects the best model from a Pareto front of accuracy and training time.
+
+        Args:
+            grid_search (dask_ml.model_selection.GridSearchCV): The fitted GridSearchCV object.
+
+        Returns:
+            sklearn.pipeline.Pipeline: The best pipeline based on the Pareto front.
         """
         cv_results = grid_search.cv_results_
         

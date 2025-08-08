@@ -51,6 +51,13 @@ class DataAnalyzer:
     def _identify_target_and_problem_type(self, ddf, unique_values):
         """
         Heuristically identifies the target column and problem type.
+
+        Args:
+            ddf (dd.DataFrame): The Dask DataFrame to analyze.
+            unique_values (pd.Series): A pandas Series with unique value counts for each column.
+
+        Returns:
+            tuple: A tuple containing the identified target column name and the problem type.
         """
         # 1. Check for explicit candidates
         for col_name in self.target_candidates:
@@ -64,6 +71,13 @@ class DataAnalyzer:
     def _classify_column(self, column_series, n_unique):
         """
         Determines problem type based on a potential target column's properties.
+
+        Args:
+            column_series (dd.Series): The Dask Series representing the column.
+            n_unique (int): The number of unique values in the column.
+
+        Returns:
+            tuple: A tuple containing the column name and the determined problem type.
         """
         col_name = column_series.name
         

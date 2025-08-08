@@ -6,6 +6,8 @@ import sys
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
+from unittest.mock import patch, mock_open
+
 from core.meta_learning import MetaLearner
 
 class TestMetaLearner(unittest.TestCase):
@@ -50,7 +52,8 @@ class TestMetaLearner(unittest.TestCase):
 
     def tearDown(self):
         """Remove the temporary experiences file."""
-        os.remove(self.test_experiences_path)
+        if os.path.exists(self.test_experiences_path):
+            os.remove(self.test_experiences_path)
 
     def test_calculate_similarity(self):
         """Test the similarity calculation logic."""
@@ -107,6 +110,34 @@ class TestMetaLearner(unittest.TestCase):
         # The recommendation logic returns the best it can find.
         self.assertEqual(len(recommendations), 1)
         self.assertEqual(recommendations[0]['model'], 'LinearRegression')
+
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('json.dump')
+    def test_add_experience(self, mock_json_dump, mock_file_open):
+        """Test that a new experience is added and saved correctly."""
+        new_experience = {
+            "project_name": "Project D (Test)",
+            "dataset_profile": {"n_rows": 200, "n_features": 5, "problem_type": "Classification"},
+            "best_pipeline": {"model": "SVC"}
+        }
+        
+        initial_experience_count = len(self.meta_learner.experiences)
+        
+        # Call the method to be tested
+        self.meta_learner.add_experience(new_experience, experiences_path=self.test_experiences_path)
+        
+        # 1. Check if the experience was added to the internal list
+        self.assertEqual(len(self.meta_learner.experiences), initial_experience_count + 1)
+        self.assertEqual(self.meta_learner.experiences[-1]['project_name'], "Project D (Test)")
+        
+        # 2. Check if the file was opened for writing
+        mock_file_open.assert_called_once_with(self.test_experiences_path, 'w')
+        
+        # 3. Check if json.dump was called with the correct data
+        mock_json_dump.assert_called_once()
+        args, kwargs = mock_json_dump.call_args
+        self.assertEqual(len(args[0]), initial_experience_count + 1)
+        self.assertEqual(args[0][-1]['project_name'], "Project D (Test)")
 
 if __name__ == '__main__':
     unittest.main()
