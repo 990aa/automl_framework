@@ -2,8 +2,8 @@
 import time
 import os
 import joblib
+from sklearn.ensemble import RandomForestClassifier
 from dask_ml.linear_model import LogisticRegression
-from dask_ml.ensemble import RandomForestClassifier
 
 # Note: Not all scikit-learn models have a Dask-ML equivalent.
 # We are using a subset here. GradientBoostingClassifier, SVC, etc.,
